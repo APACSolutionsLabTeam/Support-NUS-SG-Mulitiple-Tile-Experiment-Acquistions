@@ -1,0 +1,114 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script>
+  <Context>Zen26</Context>
+  <Version>1.0</Version>
+  <Language>Python</Language>
+  <Text>from System.IO import File, Directory, FileInfo
+from System import Environment
+# clear macro editor output
+Zen.Application.MacroEditor.ClearMessages()
+#------------------------------------------------------------
+#--- Split a full filename with path into its components. ---
+#------------------------------------------------------------
+#--- Example: "C:\Folder\SubFolder\FileName.czi" returns: ---
+#---          "C:\Folder\SubFolder" (1st returned value)  ---
+#---          "FileName"            (2nd returned value)  ---
+#---          ".czi"                (3rd returned value)  ---
+#------------------------------------------------------------
+def SplitFullFilename(strFullFilename):
+    fileInfo = FileInfo(strFullFilename)
+    strFolder = fileInfo.DirectoryName
+    strExt = fileInfo.Extension
+    strName = fileInfo.Name.Replace(strExt, "")
+    return strFolder, strName, strExt
+#---------------------------------------------------------
+#--- Get list of existing CZEXP files and index of the ---
+#--- CZEXP designated in the "strExper" parameter. -------
+#---------------------------------------------------------
+def GetAvailableCzexpFiles():
+    nSelected = 0
+    
+    #--- Get EXP Folder ---
+    strUserDocsFolder = Zen.Application.Environment.GetFolderPath(ZenSpecialFolder.UserDocuments)
+    strExpDocsFolder = strUserDocsFolder + "\\Experiment Setups"
+    
+    #--- Get list of EXP files and 0-based index of the initially selected file ---
+    files = Directory.GetFiles(strExpDocsFolder,"*czexp")
+    listExps = []
+    for i in range(0, files.Length):
+        #--- Get the next EXP filename ---
+        file = files[i]
+        strFolder, strName, strExt = SplitFullFilename(file)
+        #--- Add the EXP filename to the list (no path, no extensiion) ---
+        listExps.append(strName)
+    #--- Return the list of EXP files (no path or ext) ---
+    return listExps
+#----------------------------------------
+#--- Display a window for user input. ---
+#----------------------------------------
+def GetUserInput():
+    #--- Remember the Last Folder Processed (or current folder) ---
+    strPath = Environment.CurrentDirectory
+    #--- Get CZIAS Info ---
+    listExps = GetAvailableCzexpFiles()
+    #--- Initialize GUI ---
+    mainWindow = ZenWindow()
+    mainWindow.Initialize("Sequential Experiment Execution")
+    mainWindow.AddTextBox("num_aquisitions","Number of acquistions:", 2)
+    
+    #--- Display GUI ---
+    result = mainWindow.Show()
+    ## Get user-input for number of acquistions
+    num_aquisitions = int(result.GetValue("num_aquisitions"))
+    window1_5 = ZenWindow()
+    window1_5.Initialize("Select Experiments")
+    for i in range(num_aquisitions):
+        window1_5.AddDropDown("Experiment"+str(i+1), "Experiment file :"+str(i+1), listExps,0)
+    result1_5 = window1_5.Show()
+    #--- Process GUI Inputs ---
+    strExp = []
+    for i in range(num_aquisitions):
+           strExp_temp    = str(result1_5.GetValue("Experiment"+str(i+1)))
+           strExp.append(strExp_temp)
+           
+    #--- Remember the Last Folder Processed ---
+    Environment.CurrentDirectory = strPath
+    #--- Return User Inputs (mode will be C_MODE_CANCEL on "Cancel") ---
+    return num_aquisitions, strExp
+
+listExps = GetAvailableCzexpFiles()
+num_aquisitions, strExp = GetUserInput()
+
+image_arr = []
+for file in strExp:
+    #print(file)
+    # Create experiment 
+    expCurr = ZenExperiment()
+    
+    #Load experiment 
+    expCurr.Load(file)
+    #run Expriment
+    Zen.Acquisition.Experiments.ActiveExperiment = expCurr
+    image = Zen.Acquisition.Execute(expCurr)
+    #Zen.Application.Documents.Add(image)
+    image_arr.append(image)
+    
+image_final = image_arr[0]
+for i in range(image_arr.Count-1) :   
+   image_final = Zen.Processing.Utilities.AddChannels(image_final, image_arr[i+1])
+Zen.Application.Documents.Add(image_final)  
+
+for i in range(image_arr.Count):
+    image_arr[i].Close()
+</Text>
+  <Author></Author>
+  <Description></Description>
+  <Keywords></Keywords>
+  <Row>88</Row>
+  <Column>6</Column>
+  <WatchVariables>
+    <Watch>strExp</Watch>
+    <Watch>image</Watch>
+    <Watch>image_arr</Watch>
+  </WatchVariables>
+</Script>
